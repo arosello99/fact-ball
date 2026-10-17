@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#142a20">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fact Ball">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Fact Ball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Graduate&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: an old hand-turned ballpark scoreboard — slate-green board, chalk numerals, amber bulbs; the diamond sits beside the pitch */
+:root {
+  --board: #1d3a2c;
+  --board-deep: #142a20;
+  --slat: #24463a;
+  --chalk: #f1ede1;
+  --chalk-dim: #a9b9ad;
+  --bulb: #f4b740;
+  --clay: #c26a3d;
+  --grass: #3f7a4f;
+  --ok: #7fd18b;
+  --work: #f4b740;
+  --new: #5f7a6c;
+  --display: "Graduate", "Rockwell", Georgia, serif;
+  --ui: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  background: var(--board-deep);
+  color: var(--chalk);
+  font-family: var(--body);
+  font-size: 16px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+  margin: 0;
+}
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 6vw, 2.8rem); letter-spacing: .04em; margin: 0; color: var(--chalk); }
+h1 span { color: var(--bulb); }
+.tag { font-family: var(--ui); font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chalk-dim); }
+
+.board { background: var(--board); border: 3px solid var(--slat); border-radius: 6px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px; }
+.cell { background: var(--board-deep); padding: 8px 6px 10px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.cell b { font-family: var(--ui); font-weight: 600; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--chalk-dim); }
+.cell output { font-family: var(--display); font-size: clamp(1.4rem, 5vw, 2rem); color: var(--bulb); font-variant-numeric: tabular-nums; line-height: 1.1; }
+
+.play { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; align-items: stretch; }
+@media (max-width: 640px) { .play { grid-template-columns: 1fr; } .field { order: 2; } }
+
+.field { background: var(--board); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.field svg { width: 100%; max-width: 300px; height: auto; display: block; }
+.call { font-family: var(--display); font-size: 1.25rem; min-height: 1.6em; text-align: center; color: var(--chalk); letter-spacing: .03em; }
+.call.big { color: var(--bulb); }
+
+.pitch { background: var(--board); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.batter { font-family: var(--ui); font-size: 1rem; letter-spacing: .1em; text-transform: uppercase; color: var(--chalk-dim); text-align: center; }
+.fact { font-family: var(--display); font-size: clamp(2.6rem, 11vw, 4.2rem); text-align: center; line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.answer { font-family: var(--display); font-size: 2.2rem; text-align: center; font-variant-numeric: tabular-nums; background: var(--board-deep); border: 2px solid var(--slat); border-radius: 6px; min-height: 3.4rem; padding: 6px; color: var(--chalk); }
+.answer.empty { color: var(--new); }
+.hint { font-family: var(--ui); font-size: 1.05rem; text-align: center; color: var(--chalk-dim); min-height: 1.4em; }
+.hint strong { color: var(--bulb); font-weight: 700; }
+
+.pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pad button, .btn { font-family: var(--ui); font-weight: 700; font-size: 1.5rem; background: var(--chalk); color: var(--board-deep); border: 0; border-radius: 6px; padding: 12px 0; cursor: pointer; box-shadow: 0 3px 0 #b9b39f; touch-action: manipulation; }
+.pad button:active, .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #b9b39f; }
+.pad .alt { background: var(--slat); color: var(--chalk); box-shadow: 0 3px 0 #0f2018; font-size: 1.15rem; letter-spacing: .06em; }
+.pad .go { background: var(--bulb); color: var(--board-deep); box-shadow: 0 3px 0 #a87818; font-size: 1.15rem; letter-spacing: .06em; }
+button:focus-visible, .chip:focus-visible, input:focus-visible { outline: 3px solid var(--bulb); outline-offset: 2px; }
+
+.panel { background: var(--board); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.panel h2 { font-family: var(--display); font-weight: 400; font-size: 1.35rem; margin: 0; letter-spacing: .03em; }
+.panel p { margin: 0; color: var(--chalk-dim); line-height: 1.5; max-width: 62ch; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.label { font-family: var(--ui); font-weight: 600; font-size: .85rem; letter-spacing: .14em; text-transform: uppercase; color: var(--chalk-dim); width: 100%; }
+.chip { font-family: var(--ui); font-weight: 700; font-size: 1.15rem; background: var(--board-deep); color: var(--chalk-dim); border: 2px solid var(--slat); border-radius: 999px; padding: 6px 14px; cursor: pointer; min-width: 3rem; }
+.chip[aria-pressed="true"] { background: var(--chalk); color: var(--board-deep); border-color: var(--chalk); }
+.name-edit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.name-edit label { font-family: var(--ui); font-size: .95rem; color: var(--chalk-dim); }
+.name-edit input { font-family: var(--ui); font-weight: 600; font-size: 1.1rem; background: var(--board-deep); color: var(--chalk); border: 2px solid var(--slat); border-radius: 6px; padding: 6px 10px; width: 12rem; max-width: 100%; }
+.btn { font-size: 1.3rem; padding: 12px 28px; letter-spacing: .06em; background: var(--bulb); box-shadow: 0 3px 0 #a87818; }
+.btn.ghost { background: transparent; color: var(--chalk); box-shadow: none; border: 2px solid var(--slat); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.stat { background: var(--board-deep); border-radius: 6px; padding: 10px 12px; }
+.stat b { display: block; font-family: var(--ui); font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--chalk-dim); font-weight: 600; }
+.stat span { font-family: var(--display); font-size: 1.7rem; color: var(--bulb); font-variant-numeric: tabular-nums; }
+.praise { font-family: var(--body); font-size: 1.1rem; color: var(--chalk); line-height: 1.5; }
+
+.scout-wrap { overflow-x: auto; }
+table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(--ui); font-variant-numeric: tabular-nums; margin: 0 auto; }
+.scout th { font-weight: 700; color: var(--chalk-dim); font-size: .95rem; padding: 2px 4px; }
+.scout td { width: 2.1rem; height: 2.1rem; text-align: center; border-radius: 4px; font-weight: 600; font-size: .95rem; }
+.scout td.s-new { background: var(--board-deep); color: var(--new); }
+.scout td.s-work { background: var(--work); color: var(--board-deep); }
+.scout td.s-ok { background: var(--ok); color: var(--board-deep); }
+.scout td.s-none { background: transparent; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; font-family: var(--ui); color: var(--chalk-dim); font-size: 1rem; }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+.axis-note { font-family: var(--ui); font-size: .95rem; color: var(--chalk-dim); text-align: center; }
+
+.foot { font-size: .9rem; color: var(--chalk-dim); line-height: 1.5; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .flash { animation: flash .5s ease-out; }
+  @keyframes flash { from { color: var(--bulb); transform: scale(1.08); } to { transform: scale(1); } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Fact Ball</h1>
+    <div class="tag" id="tagline">3 innings · about 5 minutes</div>
+  </header>
+
+  <!-- SETUP -->
+  <section class="panel" id="setup">
+    <h2>Who's up?</h2>
+    <div class="row" id="players"><span class="label">Batter</span></div>
+    <div class="name-edit">
+      <label for="pname">Name</label>
+      <input id="pname" type="text" maxlength="16" autocomplete="off">
+    </div>
+    <div class="row" id="modes"><span class="label">Game</span></div>
+    <div class="row" id="tables"><span class="label">Times tables in today's game</span></div>
+    <div class="row" id="levels"><span class="label">League (how fast counts as a hit)</span></div>
+    <p>Answer fast to hit for extra bases. Miss one and it's a foul ball: type the right answer and you still take your base. Nobody strikes out.</p>
+    <div class="row">
+      <button class="btn" id="play" type="button">Play ball</button>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" hidden>
+    <div class="wrap" style="max-width:none">
+      <div class="board">
+        <div class="cell"><b>Inning</b><output id="inn">1</output></div>
+        <div class="cell"><b>At bat</b><output id="ab">1/6</output></div>
+        <div class="cell"><b>Hits</b><output id="hits">0</output></div>
+        <div class="cell"><b>Runs</b><output id="runs">0</output></div>
+      </div>
+      <div class="play">
+        <div class="field">
+          <svg viewBox="0 0 200 180" role="img" aria-label="Baseball diamond showing runners on base">
+            <path d="M100 172 L10 82 A127 127 0 0 1 190 82 Z" fill="#3f7a4f"/>
+            <path d="M100 160 L40 100 L100 40 L160 100 Z" fill="#c26a3d"/>
+            <path d="M100 148 L52 100 L100 52 L148 100 Z" fill="#3f7a4f"/>
+            <circle cx="100" cy="100" r="7" fill="#c26a3d"/>
+            <rect id="b1" x="150" y="90" width="20" height="20" transform="rotate(45 160 100)" fill="#f1ede1" stroke="#142a20" stroke-width="2"/>
+            <rect id="b2" x="90" y="30" width="20" height="20" transform="rotate(45 100 40)" fill="#f1ede1" stroke="#142a20" stroke-width="2"/>
+            <rect id="b3" x="30" y="90" width="20" height="20" transform="rotate(45 40 100)" fill="#f1ede1" stroke="#142a20" stroke-width="2"/>
+            <path d="M92 152 L108 152 L108 160 L100 168 L92 160 Z" fill="#f1ede1"/>
+          </svg>
+          <div class="call" id="call">Batter up</div>
+        </div>
+        <div class="pitch">
+          <div class="batter" id="batter">Now batting</div>
+          <div class="fact" id="fact">7 × 8</div>
+          <div class="answer empty" id="answer" aria-live="polite">?</div>
+          <div class="hint" id="hint">Type your answer, then press Swing</div>
+          <div class="pad" id="pad"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="panel" id="results" hidden>
+    <h2 id="final">Final</h2>
+    <div class="stats" id="stats"></div>
+    <div class="praise" id="praise"></div>
+    <div class="row">
+      <button class="btn" id="again" type="button">Play again</button>
+      <button class="btn ghost" id="back" type="button">Change lineup</button>
+    </div>
+  </section>
+
+  <!-- SCOUTING -->
+  <section class="panel" id="scoutPanel">
+    <h2 id="scoutTitle">Scouting report</h2>
+    <p>Every fact seen on this device for this batter and game. Green means fast and right, gold means still warming up. The game pitches gold and gray facts more often.</p>
+    <div class="axis-note" id="axisNote"></div>
+    <div class="scout-wrap"><table class="scout" id="scout"></table></div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>Game ready</span>
+      <span><i style="background:var(--work)"></i>Warming up</span>
+      <span><i style="background:var(--board-deep);outline:1px solid var(--slat)"></i>Not seen yet</span>
+    </div>
+  </section>
+
+  <p class="foot">For parents: one game a day beats long sessions. Each batter has their own scouting report and best game on this device. Watch the gold squares turn green over a few weeks, and praise that progress.</p>
+</div>
+
+<script>
+(() => {
+  const LEVELS = {
+    "T-ball": { hr: 5, triple: 8, double: 12 },
+    Rookie:   { hr: 4, triple: 6, double: 9 },
+    Minors:   { hr: 3, triple: 5, double: 7 },
+    Majors:   { hr: 2, triple: 3, double: 5 }
+  };
+  const MODES = {
+    mul:   { label: "× Times tables",   sym: "×", fast: 4 },
+    add10: { label: "+ Add within 10",  sym: "+", fast: 5 },
+    add20: { label: "+ Add within 20",  sym: "+", fast: 5 },
+    sub10: { label: "− Subtract within 10", sym: "−", fast: 5 },
+    sub20: { label: "− Subtract within 20", sym: "−", fast: 5 }
+  };
+  const INNINGS = 3, PER_INNING = 6;
+  const $ = id => document.getElementById(id);
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+
+  // ---- players (migrates the original single-player save into player 1)
+  let players = store.get("fb-players", null);
+  if (!players) {
+    const old = store.get("fb-prefs", null);
+    players = [
+      { id: "p1", name: "Alberto", mode: "mul", tables: old && old.tables ? old.tables : [2,3,4,5,6,7,8,9], level: old && old.level ? old.level : "Minors" },
+      { id: "p2", name: "Clarisa", mode: "add10", tables: [2,3,4,5,6,7,8,9], level: "T-ball" }
+    ];
+    const oldStats = store.get("fb-stats", null);
+    if (oldStats) {
+      const moved = {};
+      Object.keys(oldStats).forEach(k => { moved["mul|" + k] = oldStats[k]; });
+      store.set("fb-stats-p1", moved);
+    }
+    const oldBest = store.get("fb-best", 0);
+    if (oldBest) store.set("fb-best-p1-mul", oldBest);
+    store.set("fb-players", players);
+  }
+  let cur = store.get("fb-current", "p1");
+  const P = () => players.find(p => p.id === cur) || players[0];
+  let stats = store.get("fb-stats-" + P().id, {});
+  const savePlayers = () => store.set("fb-players", players);
+
+  // ---- fact pools
+  const sortKey = (a, b, s) => (a <= b ? a + s + b : b + s + a);
+  function pool(mode, tables) {
+    const out = [];
+    if (mode === "mul") {
+      (tables.length ? tables : [2,3,4,5,6,7,8,9]).forEach(a => {
+        for (let b = 2; b <= 12; b++) out.push({ key: sortKey(a, b, "×"), x: a, y: b, ans: a * b, flip: true, sym: "×" });
+      });
+    } else if (mode === "add10" || mode === "add20") {
+      const cap = mode === "add10" ? 10 : 20;
+      for (let a = 0; a <= 10; a++) for (let b = a; b <= 10; b++) {
+        if (a + b > cap) continue;
+        out.push({ key: a + "+" + b, x: a, y: b, ans: a + b, flip: true, sym: "+", big: a + b > 10 });
+      }
+    } else {
+      const cap = mode === "sub10" ? 10 : 20;
+      for (let b = 0; b <= 10; b++) for (let c = 0; c <= 10; c++) {
+        if (b + c > cap) continue;
+        out.push({ key: (b + c) + "-" + b, x: b + c, y: b, ans: c, flip: false, sym: "−", big: b + c > 10 });
+      }
+    }
+    return out;
+  }
+  function status(mode, key) {
+    const s = stats[mode + "|" + key];
+    if (!s || !s.seen) return "new";
+    return s.right / s.seen >= .85 && s.avg <= MODES[mode].fast ? "ok" : "work";
+  }
+  function pickFact(lastKey) {
+    const p = P(), items = pool(p.mode, p.tables);
+    const w = items.map(it => {
+      const st = status(p.mode, it.key);
+      let v = st === "new" ? 3 : st === "work" ? 4 : 1;
+      if (it.x === 0 || it.y === 0) v *= .4;
+      if (it.big && (p.mode === "add20" || p.mode === "sub20")) v *= 1.6;
+      if (it.key === lastKey) v = 0;
+      return v;
+    });
+    let r = Math.random() * w.reduce((s, v) => s + v, 0);
+    for (let i = 0; i < items.length; i++) { r -= w[i]; if (r <= 0) return dress(items[i]); }
+    return dress(items[0]);
+  }
+  function dress(it) {
+    const swap = it.flip && Math.random() < .5;
+    const a = swap ? it.y : it.x, b = swap ? it.x : it.y;
+    return { key: it.key, text: `${a} ${it.sym} ${b}`, ans: it.ans };
+  }
+
+  // ---- setup UI
+  function chip(id, text, pressed, onClick) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.id = id; b.textContent = text;
+    b.setAttribute("aria-pressed", pressed); b.onclick = onClick; return b;
+  }
+  function clearRow(id) { const row = $(id); [...row.querySelectorAll(".chip")].forEach(c => c.remove()); return row; }
+  function renderSetup() {
+    const p = P();
+    const pr = clearRow("players");
+    players.forEach(pl => pr.appendChild(chip("pl-" + pl.id, pl.name, pl.id === p.id, () => {
+      cur = pl.id; store.set("fb-current", cur); stats = store.get("fb-stats-" + cur, {}); renderSetup(); drawScout();
+    })));
+    $("pname").value = p.name;
+    const mr = clearRow("modes");
+    Object.keys(MODES).forEach(m => mr.appendChild(chip("md-" + m, MODES[m].label, p.mode === m, () => { p.mode = m; savePlayers(); renderSetup(); drawScout(); })));
+    const tr = clearRow("tables");
+    tr.hidden = p.mode !== "mul";
+    for (let n = 2; n <= 12; n++) tr.appendChild(chip("t" + n, n, p.tables.includes(n), () => {
+      p.tables = p.tables.includes(n) ? p.tables.filter(x => x !== n) : [...p.tables, n].sort((a, b) => a - b);
+      savePlayers(); renderSetup();
+    }));
+    const lr = clearRow("levels");
+    Object.keys(LEVELS).forEach(k => lr.appendChild(chip("lv-" + k.replace(/\W/g, ""), k, p.level === k, () => { p.level = k; savePlayers(); renderSetup(); })));
+    $("tagline").textContent = `${MODES[p.mode].label.slice(2)} · 3 innings · about 5 minutes`;
+  }
+  $("pname").addEventListener("input", e => {
+    const v = e.target.value.trim(); if (!v) return;
+    P().name = v; savePlayers();
+    const c = $("pl-" + P().id); if (c) c.textContent = v;
+  });
+
+  // ---- scouting report
+  function drawScout() {
+    const p = P(), m = p.mode;
+    $("scoutTitle").textContent = `Scouting report · ${p.name}`;
+    let h = "";
+    if (m === "mul") {
+      $("axisNote").textContent = "Times tables 2 to 12";
+      h = "<tr><th>×</th>"; for (let c = 2; c <= 12; c++) h += `<th scope="col">${c}</th>`; h += "</tr>";
+      for (let r = 2; r <= 12; r++) {
+        h += `<tr><th scope="row">${r}</th>`;
+        for (let c = 2; c <= 12; c++) { const st = status(m, sortKey(r, c, "×")); h += `<td class="s-${st}" title="${r} × ${c} = ${r*c}">${st === "new" ? "" : r*c}</td>`; }
+        h += "</tr>";
+      }
+    } else if (m === "add10" || m === "add20") {
+      const cap = m === "add10" ? 10 : 20;
+      $("axisNote").textContent = `Addition within ${cap}: row + column, answer in the square`;
+      h = "<tr><th>+</th>"; for (let c = 0; c <= 10; c++) h += `<th scope="col">${c}</th>`; h += "</tr>";
+      for (let r = 0; r <= 10; r++) {
+        h += `<tr><th scope="row">${r}</th>`;
+        for (let c = 0; c <= 10; c++) {
+          if (r + c > cap) { h += `<td class="s-none"></td>`; continue; }
+          const st = status(m, sortKey(r, c, "+")); h += `<td class="s-${st}" title="${r} + ${c} = ${r+c}">${st === "new" ? "" : r+c}</td>`;
+        }
+        h += "</tr>";
+      }
+    } else {
+      const cap = m === "sub10" ? 10 : 20;
+      $("axisNote").textContent = `Subtraction within ${cap}: row is the number taken away, column is the answer, the square shows the starting number`;
+      h = "<tr><th>−</th>"; for (let c = 0; c <= 10; c++) h += `<th scope="col">${c}</th>`; h += "</tr>";
+      for (let b = 0; b <= 10; b++) {
+        h += `<tr><th scope="row">${b}</th>`;
+        for (let c = 0; c <= 10; c++) {
+          if (b + c > cap) { h += `<td class="s-none"></td>`; continue; }
+          const st = status(m, (b + c) + "-" + b); h += `<td class="s-${st}" title="${b+c} − ${b} = ${c}">${st === "new" ? "" : b+c}</td>`;
+        }
+        h += "</tr>";
+      }
+    }
+    $("scout").innerHTML = h;
+  }
+
+  // ---- game
+  let g;
+  function newGame() {
+    stats = store.get("fb-stats-" + P().id, {});
+    g = { inning: 1, ab: 1, runs: 0, hits: 0, hr: 0, fixed: 0, bases: [false, false, false], fact: null, typed: "", t0: 0, mode: "swing", fastest: null, retry: [] };
+    $("setup").hidden = true; $("results").hidden = true; $("game").hidden = false;
+    $("batter").textContent = `Now batting: ${P().name}`;
+    say("Batter up"); nextPitch();
+  }
+  const abIndex = () => (g.inning - 1) * PER_INNING + g.ab;
+  function nextPitch() {
+    if (g.retry.length && g.retry[0].due <= abIndex()) g.fact = g.retry.shift().fact;
+    else g.fact = pickFact(g.fact && g.fact.key);
+    g.typed = ""; g.mode = "swing"; g.t0 = performance.now();
+    $("fact").textContent = g.fact.text;
+    $("hint").textContent = "Type your answer, then press Swing";
+    renderAnswer(); renderBoard();
+  }
+  function renderAnswer() { const el = $("answer"); el.textContent = g.typed || "?"; el.classList.toggle("empty", !g.typed); }
+  function renderBoard() {
+    $("inn").textContent = g.inning;
+    $("ab").textContent = `${Math.min(g.ab, PER_INNING)}/${PER_INNING}`;
+    $("hits").textContent = g.hits; $("runs").textContent = g.runs;
+    ["b1","b2","b3"].forEach((id, i) => $(id).setAttribute("fill", g.bases[i] ? "#f4b740" : "#f1ede1"));
+  }
+  function flash(id) { const el = $(id); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+  function advance(n) {
+    let scored = 0; const nb = [false, false, false];
+    for (let i = 2; i >= 0; i--) if (g.bases[i]) { const to = i + n; if (to >= 3) scored++; else nb[to] = true; }
+    if (n >= 4) scored++; else nb[n - 1] = true;
+    g.bases = nb; g.runs += scored; return scored;
+  }
+  function walk() {
+    let scored = 0;
+    if (g.bases[0]) { if (g.bases[1]) { if (g.bases[2]) scored = 1; g.bases[2] = true; } g.bases[1] = true; }
+    g.bases[0] = true; g.runs += scored; return scored;
+  }
+  function record(key, right, secs) {
+    const m = P().mode, k = m + "|" + key, s = stats[k] || { seen: 0, right: 0, avg: 7 };
+    s.seen++; if (right) { s.right++; s.avg = s.avg * .6 + Math.min(secs, 15) * .4; }
+    stats[k] = s; store.set("fb-stats-" + P().id, stats);
+  }
+  function say(t, big) { const c = $("call"); c.textContent = t; c.className = "call" + (big ? " big" : ""); }
+  function swing() {
+    if (!g.typed) return;
+    const f = g.fact, val = parseInt(g.typed, 10);
+    if (g.mode === "fix") {
+      if (val === f.ans) { g.fixed++; const sc = walk(); say(sc ? "Fixed it. Walk, and a run scores!" : "Fixed it. Take your base."); endAtBat(); }
+      else { g.typed = ""; renderAnswer(); $("hint").innerHTML = `Copy it: <strong>${f.text} = ${f.ans}</strong>`; }
+      return;
+    }
+    const secs = (performance.now() - g.t0) / 1000, L = LEVELS[P().level] || LEVELS.Minors;
+    if (val === f.ans) {
+      record(f.key, true, secs);
+      if (!g.fastest || secs < g.fastest.secs) g.fastest = { secs, text: f.text };
+      const n = secs <= L.hr ? 4 : secs <= L.triple ? 3 : secs <= L.double ? 2 : 1;
+      g.hits++; if (n === 4) g.hr++;
+      const sc = advance(n);
+      say(`${["", "Single", "Double", "Triple", "HOME RUN"][n]}! ${secs.toFixed(1)}s` + (sc ? ` · ${sc} run${sc > 1 ? "s" : ""} in` : ""), n >= 3);
+      if (sc) flash("runs");
+      endAtBat();
+    } else {
+      record(f.key, false, secs);
+      g.mode = "fix"; g.typed = ""; renderAnswer();
+      g.retry.push({ fact: f, due: abIndex() + 3 });
+      say("Foul ball. Stay in the box.");
+      $("hint").innerHTML = `It's <strong>${f.text} = ${f.ans}</strong>. Type ${f.ans} to take your base.`;
+    }
+  }
+  function endAtBat() {
+    renderBoard(); g.mode = "wait";
+    setTimeout(() => {
+      g.ab++;
+      if (g.ab > PER_INNING) {
+        if (g.inning >= INNINGS) return finish();
+        g.inning++; g.ab = 1; g.bases = [false, false, false]; say(`Inning ${g.inning}`, true);
+      }
+      nextPitch();
+    }, 900);
+  }
+  function finish() {
+    const p = P(), bk = `fb-best-${p.id}-${p.mode}`;
+    let best = store.get(bk, 0); const newBest = g.runs > best;
+    if (newBest) { best = g.runs; store.set(bk, best); }
+    $("game").hidden = true; $("results").hidden = false;
+    $("final").textContent = `Final for ${p.name}: ${g.runs} run${g.runs === 1 ? "" : "s"}`;
+    $("stats").innerHTML = [["Hits", g.hits], ["Home runs", g.hr], ["Fouls fixed", g.fixed], ["Best game", best]]
+      .map(([k, v]) => `<div class="stat"><b>${k}</b><span>${v}</span></div>`).join("");
+    const lines = [];
+    if (newBest) lines.push("New personal best.");
+    if (g.fastest) lines.push(`Fastest swing: ${g.fastest.text} in ${g.fastest.secs.toFixed(1)} seconds.`);
+    lines.push(g.fixed ? `You fixed ${g.fixed} foul${g.fixed > 1 ? "s" : ""} and stayed in the game. That's how hitters get better.` : "No fouls at all this game.");
+    $("praise").textContent = lines.join(" ");
+    drawScout();
+  }
+
+  // ---- keypad + keyboard
+  const pad = $("pad");
+  ["1","2","3","4","5","6","7","8","9","Clear","0","Swing"].forEach(k => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = k; b.id = "k" + k;
+    if (k === "Clear") b.className = "alt"; if (k === "Swing") b.className = "go";
+    b.onclick = () => press(k); pad.appendChild(b);
+  });
+  function press(k) {
+    if (!g || $("game").hidden || g.mode === "wait") return;
+    if (k === "Swing") return swing();
+    if (k === "Clear") { g.typed = ""; return renderAnswer(); }
+    if (g.typed.length < 3) { g.typed += k; renderAnswer(); }
+  }
+  document.addEventListener("keydown", e => {
+    if ($("game").hidden) return;
+    if (/^[0-9]$/.test(e.key)) press(e.key);
+    else if (e.key === "Enter") { e.preventDefault(); press("Swing"); }
+    else if (e.key === "Backspace") { if (g && g.mode !== "wait") { g.typed = g.typed.slice(0, -1); renderAnswer(); } }
+  });
+
+  $("play").onclick = newGame;
+  $("again").onclick = newGame;
+  $("back").onclick = () => { $("results").hidden = true; $("setup").hidden = false; renderSetup(); };
+  renderSetup(); drawScout();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
