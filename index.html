@@ -70,7 +70,8 @@ h1 span { color: var(--bulb); }
 
 .pitch { background: var(--board); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .batter { font-family: var(--ui); font-size: 1rem; letter-spacing: .1em; text-transform: uppercase; color: var(--chalk-dim); text-align: center; }
-.fact { font-family: var(--display); font-size: clamp(2.6rem, 11vw, 4.2rem); text-align: center; line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.fact { font-family: var(--display); font-size: clamp(2.6rem, 11vw, 4.2rem); text-align: center; line-height: 1.1; letter-spacing: .02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fact.long { font-size: clamp(1.7rem, 7.5vw, 2.8rem); }
 .answer { font-family: var(--display); font-size: 2.2rem; text-align: center; font-variant-numeric: tabular-nums; background: var(--board-deep); border: 2px solid var(--slat); border-radius: 6px; min-height: 3.4rem; padding: 6px; color: var(--chalk); }
 .answer.empty { color: var(--new); }
 .hint { font-family: var(--ui); font-size: 1.05rem; text-align: center; color: var(--chalk-dim); min-height: 1.4em; }
@@ -217,6 +218,10 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
   };
   const MODES = {
     mul:   { label: "× Times tables",   sym: "×", fast: 4 },
+    div:   { label: "÷ Division",       sym: "÷", fast: 4 },
+    mix:   { label: "×÷ Mixed",         sym: "×", fast: 4 },
+    make:  { label: "+? Make 10, 100, 1,000", sym: "+", fast: 6 },
+    est:   { label: "≈ Round & estimate", sym: "", fast: 8, pace: 2 },
     add10: { label: "+ Add within 10",  sym: "+", fast: 5 },
     add20: { label: "+ Add within 20",  sym: "+", fast: 5 },
     sub10: { label: "− Subtract within 10", sym: "−", fast: 5 },
@@ -248,6 +253,7 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     if (oldBest) store.set("fb-best-p1-mul", oldBest);
     store.set("fb-players", players);
   }
+  players.forEach(p => { if (!MODES[p.mode]) p.mode = p.id === "p1" ? "mul" : "add10"; });
   let cur = store.get("fb-current", "p1");
   const P = () => players.find(p => p.id === cur) || players[0];
   let stats = store.get("fb-stats-" + P().id, {});
@@ -255,11 +261,74 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
 
   // ---- fact pools
   const sortKey = (a, b, s) => (a <= b ? a + s + b : b + s + a);
-  function pool(mode, tables) {
+  const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  const sup = n => String(n).split("").map(d => SUP[+d]).join("");
+  const fmt = n => n.toLocaleString("en-US");
+  const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  // Make 10 / 100 / 1,000 / 10,000: each row is a kind of question, keyed by the first digit (1-9) of the number given
+  const MAKE_ROWS = [
+    { k: "t",  lab: "Make 10",                 T: 10,    part: d => d },
+    { k: "h",  lab: "Make 100 · tens",         T: 100,   part: d => 10 * d },
+    { k: "hx", lab: "Make 100 · any",          T: 100,   part: d => 10 * d + rnd(1, 9), max: 9 },
+    { k: "k",  lab: "Make 1,000 · hundreds",   T: 1000,  part: d => 100 * d },
+    { k: "kx", lab: "Make 1,000 · tens",       T: 1000,  part: d => 100 * d + 10 * rnd(1, 9), max: 9 },
+    { k: "m",  lab: "Make 10,000 · thousands", T: 10000, part: d => 1000 * d },
+    { k: "mx", lab: "Make 10,000 · hundreds",  T: 10000, part: d => 1000 * d + 100 * rnd(1, 9), max: 9 }
+  ];
+  // Round & estimate: three skills in order: round to the biggest place, multiply round numbers, estimate a product
+  const roundBig = n => { const p = 10 ** (String(n).length - 1); return Math.round(n / p) * p; };
+  const notRound = d => { let n; do { n = rnd(10 ** (d - 1), 10 ** d - 1); } while (n % 10 ** (d - 1) === 0); return n; };
+  const EST_ROWS = [
+    { lab: "Round it", cells: [["rd2", "2-digit"], ["rd3", "3-digit"], ["rd4", "4-digit"]] },
+    { lab: "Zeros trick", cells: [["zz1", "1 zero"], ["zz2", "2 zeros"], ["zz3", "3 zeros"], ["zz4", "4 zeros"], ["zz5", "5 zeros"]] },
+    { lab: "Estimate", cells: [["es22", "2×2 digit"], ["es32", "3×2 digit"], ["es33", "3×3 digit"]] }
+  ];
+  function estPool() {
     const out = [];
+    [2, 3, 4].forEach(d => out.push({ key: "rd" + d, make: () => {
+      const n = notRound(d), r = roundBig(n);
+      return { text: `${fmt(n)} ≈ ?`, ans: r, hint: "Round to its biggest place", solved: `${fmt(n)} ≈ ${fmt(r)}` };
+    } }));
+    [1, 2, 3, 4, 5].forEach(z => out.push({ key: "zz" + z, make: () => {
+      const i = rnd(Math.max(0, z - 3), Math.min(3, z)), j = z - i;
+      const a = rnd(1, 9) * 10 ** i, b = rnd(2, 9) * 10 ** j;
+      return { text: `${fmt(a)} × ${fmt(b)}`, ans: a * b, hint: "Multiply the front digits, then add the zeros" };
+    } }));
+    [[2, 2], [3, 2], [3, 3]].forEach(([da, db]) => out.push({ key: "es" + da + db, make: () => {
+      let a = notRound(da), b = notRound(db);
+      if (Math.random() < .5) [a, b] = [b, a];
+      const ra = roundBig(a), rb = roundBig(b), ans = ra * rb;
+      return { text: `${fmt(a)} × ${fmt(b)} ≈ ?`, ans, hint: "Round each to its biggest place, then multiply",
+        solved: `${fmt(a)} × ${fmt(b)} ≈ ${fmt(ra)} × ${fmt(rb)} = ${fmt(ans)}` };
+    } }));
+    out.forEach(it => { it.m = "est"; });
+    return out;
+  }
+  function pool(mode, tables) {
+    if (mode === "mix") return pool("mul", tables).concat(pool("div", tables));
+    if (mode === "est") return estPool();
+    if (mode === "make") {
+      const out = [];
+      MAKE_ROWS.forEach(r => {
+        for (let d = 1; d <= 9; d++) {
+          out.push({ key: r.k + d, make: () => {
+            const a = r.part(d), front = Math.random() < .75;
+            return { text: front ? `${fmt(a)} + ? = ${fmt(r.T)}` : `? + ${fmt(a)} = ${fmt(r.T)}`, ans: r.T - a };
+          } });
+        }
+      });
+      out.forEach(it => { it.m = "make"; });
+      return out;
+    }
+    const out = [];
+    const T = tables.length ? tables : [2,3,4,5,6,7,8,9];
     if (mode === "mul") {
-      (tables.length ? tables : [2,3,4,5,6,7,8,9]).forEach(a => {
+      T.forEach(a => {
         for (let b = 2; b <= 12; b++) out.push({ key: sortKey(a, b, "×"), x: a, y: b, ans: a * b, flip: true, sym: "×" });
+      });
+    } else if (mode === "div") {
+      T.forEach(a => {
+        for (let b = 2; b <= 12; b++) out.push({ key: (a * b) + "÷" + a, x: a * b, y: a, ans: b, flip: false, sym: "÷" });
       });
     } else if (mode === "add10" || mode === "add20") {
       const cap = mode === "add10" ? 10 : 20;
@@ -274,6 +343,7 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
         out.push({ key: (b + c) + "-" + b, x: b + c, y: b, ans: c, flip: false, sym: "−", big: b + c > 10 });
       }
     }
+    out.forEach(it => { it.m = mode; });
     return out;
   }
   function status(mode, key) {
@@ -284,7 +354,7 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
   function pickFact(lastKey) {
     const p = P(), items = pool(p.mode, p.tables);
     const w = items.map(it => {
-      const st = status(p.mode, it.key);
+      const st = status(it.m, it.key);
       let v = st === "new" ? 3 : st === "work" ? 4 : 1;
       if (it.x === 0 || it.y === 0) v *= .4;
       if (it.big && (p.mode === "add20" || p.mode === "sub20")) v *= 1.6;
@@ -296,9 +366,10 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     return dress(items[0]);
   }
   function dress(it) {
+    if (it.make) { const r = it.make(); return { key: it.key, m: it.m, text: r.text, ans: r.ans, hint: r.hint, solved: r.solved }; }
     const swap = it.flip && Math.random() < .5;
     const a = swap ? it.y : it.x, b = swap ? it.x : it.y;
-    return { key: it.key, text: `${a} ${it.sym} ${b}`, ans: it.ans };
+    return { key: it.key, m: it.m, text: `${a} ${it.sym} ${b}`, ans: it.ans };
   }
 
   // ---- setup UI
@@ -318,14 +389,14 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     const mr = clearRow("modes");
     Object.keys(MODES).forEach(m => mr.appendChild(chip("md-" + m, MODES[m].label, p.mode === m, () => { p.mode = m; savePlayers(); renderSetup(); drawScout(); })));
     const tr = clearRow("tables");
-    tr.hidden = p.mode !== "mul";
+    tr.hidden = !["mul", "div", "mix"].includes(p.mode);
     for (let n = 2; n <= 12; n++) tr.appendChild(chip("t" + n, n, p.tables.includes(n), () => {
       p.tables = p.tables.includes(n) ? p.tables.filter(x => x !== n) : [...p.tables, n].sort((a, b) => a - b);
       savePlayers(); renderSetup();
     }));
     const lr = clearRow("levels");
     Object.keys(LEVELS).forEach(k => lr.appendChild(chip("lv-" + k.replace(/\W/g, ""), k, p.level === k, () => { p.level = k; savePlayers(); renderSetup(); })));
-    $("tagline").textContent = `${MODES[p.mode].label.slice(2)} · 3 innings · about 5 minutes`;
+    $("tagline").textContent = `${MODES[p.mode].label.replace(/^\S+\s/, "")} · 3 innings · about 5 minutes`;
   }
   $("pname").addEventListener("input", e => {
     const v = e.target.value.trim(); if (!v) return;
@@ -338,14 +409,58 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     const p = P(), m = p.mode;
     $("scoutTitle").textContent = `Scouting report · ${p.name}`;
     let h = "";
-    if (m === "mul") {
-      $("axisNote").textContent = "Times tables 2 to 12";
-      h = "<tr><th>×</th>"; for (let c = 2; c <= 12; c++) h += `<th scope="col">${c}</th>`; h += "</tr>";
+    const mulGrid = () => {
+      let t = "<tr><th>×</th>"; for (let c = 2; c <= 12; c++) t += `<th scope="col">${c}</th>`; t += "</tr>";
       for (let r = 2; r <= 12; r++) {
-        h += `<tr><th scope="row">${r}</th>`;
-        for (let c = 2; c <= 12; c++) { const st = status(m, sortKey(r, c, "×")); h += `<td class="s-${st}" title="${r} × ${c} = ${r*c}">${st === "new" ? "" : r*c}</td>`; }
-        h += "</tr>";
+        t += `<tr><th scope="row">${r}</th>`;
+        for (let c = 2; c <= 12; c++) { const st = status("mul", sortKey(r, c, "×")); t += `<td class="s-${st}" title="${r} × ${c} = ${r*c}">${st === "new" ? "" : r*c}</td>`; }
+        t += "</tr>";
       }
+      return t;
+    };
+    const divGrid = () => {
+      let t = "<tr><th>÷</th>"; for (let c = 2; c <= 12; c++) t += `<th scope="col">${c}</th>`; t += "</tr>";
+      for (let r = 2; r <= 12; r++) {
+        t += `<tr><th scope="row">${r}</th>`;
+        for (let c = 2; c <= 12; c++) { const st = status("div", (r * c) + "÷" + r); t += `<td class="s-${st}" title="${r*c} ÷ ${r} = ${c}">${st === "new" ? "" : r*c}</td>`; }
+        t += "</tr>";
+      }
+      return t;
+    };
+    if (m === "est") {
+      $("axisNote").textContent = "Round & estimate: round to the biggest place, use the zeros trick, then estimate whole problems";
+      h = "";
+      EST_ROWS.forEach(r => {
+        h += `<tr><th scope="row" style="white-space:nowrap;text-align:right">${r.lab}</th>`;
+        for (let i = 0; i < 5; i++) {
+          const c = r.cells[i];
+          if (!c) { h += `<td class="s-none"></td>`; continue; }
+          const st = status("est", c[0]);
+          h += `<td class="s-${st}" title="${r.lab}: ${c[1]}" style="padding:0 6px;white-space:nowrap;font-size:.85rem">${c[1]}</td>`;
+        }
+        h += "</tr>";
+      });
+    } else if (m === "make") {
+      $("axisNote").textContent = "Make 10, 100, 1,000 and 10,000: each row is a kind of question; each column is the first digit of the number given";
+      h = "<tr><th></th>"; for (let d = 1; d <= 9; d++) h += `<th scope="col">${d}</th>`; h += "</tr>";
+      MAKE_ROWS.forEach(r => {
+        h += `<tr><th scope="row" style="white-space:nowrap;text-align:right">${r.lab}</th>`;
+        for (let d = 1; d <= 9; d++) {
+          const st = status("make", r.k + d);
+          const shown = r.max ? "•" : fmt(r.part(d));
+          h += `<td class="s-${st}" title="${r.lab}, starting with ${d}" style="padding:0 4px">${st === "new" ? "" : shown}</td>`;
+        }
+        h += "</tr>";
+      });
+    } else if (m === "mul") {
+      $("axisNote").textContent = "Times tables 2 to 12";
+      h = mulGrid();
+    } else if (m === "div") {
+      $("axisNote").textContent = "Division: row is the number you divide by, column is the answer, the square shows the starting number";
+      h = divGrid();
+    } else if (m === "mix") {
+      $("axisNote").textContent = "Mixed games count toward both reports. Top: times tables. Bottom: division (row is the number you divide by, column is the answer).";
+      h = mulGrid() + `<tr><td class="s-none" colspan="12" style="height:1rem"></td></tr>` + divGrid();
     } else if (m === "add10" || m === "add20") {
       const cap = m === "add10" ? 10 : 20;
       $("axisNote").textContent = `Addition within ${cap}: row + column, answer in the square`;
@@ -389,10 +504,11 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     else g.fact = pickFact(g.fact && g.fact.key);
     g.typed = ""; g.mode = "swing"; g.t0 = performance.now();
     $("fact").textContent = g.fact.text;
-    $("hint").textContent = "Type your answer, then press Swing";
+    $("fact").classList.toggle("long", g.fact.text.length > 8);
+    $("hint").textContent = g.fact.hint || "Type your answer, then press Swing";
     renderAnswer(); renderBoard();
   }
-  function renderAnswer() { const el = $("answer"); el.textContent = g.typed || "?"; el.classList.toggle("empty", !g.typed); }
+  function renderAnswer() { const el = $("answer"); el.textContent = g.typed ? fmt(Number(g.typed)) : "?"; el.classList.toggle("empty", !g.typed); }
   function renderBoard() {
     $("inn").textContent = g.inning;
     $("ab").textContent = `${Math.min(g.ab, PER_INNING)}/${PER_INNING}`;
@@ -411,36 +527,38 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     if (g.bases[0]) { if (g.bases[1]) { if (g.bases[2]) scored = 1; g.bases[2] = true; } g.bases[1] = true; }
     g.bases[0] = true; g.runs += scored; return scored;
   }
-  function record(key, right, secs) {
-    const m = P().mode, k = m + "|" + key, s = stats[k] || { seen: 0, right: 0, avg: 7 };
+  function record(m, key, right, secs) {
+    const k = m + "|" + key, s = stats[k] || { seen: 0, right: 0, avg: 7 };
     s.seen++; if (right) { s.right++; s.avg = s.avg * .6 + Math.min(secs, 15) * .4; }
     stats[k] = s; store.set("fb-stats-" + P().id, stats);
   }
+  const solved = f => f.solved ? f.solved : f.text.includes("?") ? f.text.replace("?", fmt(f.ans)) : `${f.text} = ${fmt(f.ans)}`;
   function say(t, big) { const c = $("call"); c.textContent = t; c.className = "call" + (big ? " big" : ""); }
   function swing() {
     if (!g.typed) return;
     const f = g.fact, val = parseInt(g.typed, 10);
     if (g.mode === "fix") {
       if (val === f.ans) { g.fixed++; const sc = walk(); say(sc ? "Fixed it. Walk, and a run scores!" : "Fixed it. Take your base."); endAtBat(); }
-      else { g.typed = ""; renderAnswer(); $("hint").innerHTML = `Copy it: <strong>${f.text} = ${f.ans}</strong>`; }
+      else { g.typed = ""; renderAnswer(); $("hint").innerHTML = `Copy it: <strong>${solved(f)}</strong>`; }
       return;
     }
     const secs = (performance.now() - g.t0) / 1000, L = LEVELS[P().level] || LEVELS.Minors;
     if (val === f.ans) {
-      record(f.key, true, secs);
+      record(f.m, f.key, true, secs);
       if (!g.fastest || secs < g.fastest.secs) g.fastest = { secs, text: f.text };
-      const n = secs <= L.hr ? 4 : secs <= L.triple ? 3 : secs <= L.double ? 2 : 1;
+      const ps = secs / ((MODES[f.m] && MODES[f.m].pace) || 1);
+      const n = ps <= L.hr ? 4 : ps <= L.triple ? 3 : ps <= L.double ? 2 : 1;
       g.hits++; if (n === 4) g.hr++;
       const sc = advance(n);
       say(`${["", "Single", "Double", "Triple", "HOME RUN"][n]}! ${secs.toFixed(1)}s` + (sc ? ` · ${sc} run${sc > 1 ? "s" : ""} in` : ""), n >= 3);
       if (sc) flash("runs");
       endAtBat();
     } else {
-      record(f.key, false, secs);
+      record(f.m, f.key, false, secs);
       g.mode = "fix"; g.typed = ""; renderAnswer();
       g.retry.push({ fact: f, due: abIndex() + 3 });
       say("Foul ball. Stay in the box.");
-      $("hint").innerHTML = `It's <strong>${f.text} = ${f.ans}</strong>. Type ${f.ans} to take your base.`;
+      $("hint").innerHTML = `It's <strong>${solved(f)}</strong>. Type ${fmt(f.ans)} to take your base.`;
     }
   }
   function endAtBat() {
@@ -482,7 +600,7 @@ table.scout { border-collapse: separate; border-spacing: 3px; font-family: var(-
     if (!g || $("game").hidden || g.mode === "wait") return;
     if (k === "Swing") return swing();
     if (k === "Clear") { g.typed = ""; return renderAnswer(); }
-    if (g.typed.length < 3) { g.typed += k; renderAnswer(); }
+    if (g.typed.length < 7) { g.typed += k; renderAnswer(); }
   }
   document.addEventListener("keydown", e => {
     if ($("game").hidden) return;
